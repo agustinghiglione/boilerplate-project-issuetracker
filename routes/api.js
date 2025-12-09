@@ -52,15 +52,19 @@ router.get('/issues/:project', (req, res) => {
 
   let filteredIssues = [...issuesDB[project]];
 
-  // Aplicar filtros
+  // Aplicar filtros EXACTOS (no parciales)
   Object.keys(filters).forEach((key) => {
-    if (key === 'open') {
+    if (key === '_id') {
+      // Filtro exacto para _id
+      filteredIssues = filteredIssues.filter((issue) => issue[key] === filters[key]);
+    } else if (key === 'open') {
       // Convertir string a boolean
       const value = filters[key] === 'true';
       filteredIssues = filteredIssues.filter((issue) => issue[key] === value);
-    } else if (key !== '_id') {
-      filteredIssues = filteredIssues.filter((issue) =>
-        String(issue[key]).toLowerCase().includes(String(filters[key]).toLowerCase())
+    } else {
+      // Filtro exacto para otros campos de texto
+      filteredIssues = filteredIssues.filter((issue) => 
+        String(issue[key]).toLowerCase() === String(filters[key]).toLowerCase()
       );
     }
   });
@@ -98,7 +102,7 @@ router.put('/issues/:project', (req, res) => {
   let hasValidUpdate = false;
 
   allowedFields.forEach((field) => {
-    if (updateFields[field] !== undefined) {
+    if (updateFields[field] !== undefined && updateFields[field] !== '') {
       issuesDB[project][issueIndex][field] = updateFields[field];
       hasValidUpdate = true;
     }
@@ -108,9 +112,10 @@ router.put('/issues/:project', (req, res) => {
     return res.json({ error: 'could not update', '_id': _id });
   }
 
-  // Actualizar fecha
+  // Actualizar fecha (IMPORTANTE)
   issuesDB[project][issueIndex].updated_on = new Date();
 
+  // Devolver EXACTAMENTE lo que FCC espera
   res.json({ result: 'successfully updated', '_id': _id });
 });
 

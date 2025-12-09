@@ -134,7 +134,7 @@ suite('Functional Tests', function () {
       });
   });
 
-  // 7. Update one field on an issue
+   // 7. Update one field on an issue
   test('Update one field on an issue: PUT request to /api/issues/{project}', function (done) {
     const updateData = {
       _id: createdIssueId,
@@ -142,7 +142,7 @@ suite('Functional Tests', function () {
     };
 
     chai
-      .request(app) // ← CAMBIAR server por app
+      .request(app)
       .put(`/api/issues/${project}`)
       .send(updateData)
       .end((err, res) => {
