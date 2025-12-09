@@ -1,10 +1,8 @@
 const express = require('express');
 const router = express.Router();
 
-// Almacenamiento en memoria (simula DB)
 const issuesDB = {};
 
-// Helper: generar ID único
 function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).substr(2);
 }
@@ -12,17 +10,15 @@ function generateId() {
 // POST /api/issues/:project
 router.post('/issues/:project', (req, res) => {
   const project = req.params.project;
-  const { issue_title, issue_text, created_by, assigned_to = '', status_text = '' } = req.body;
+  const { issue_title, issue_text, created_by } = req.body;
+  const assigned_to = req.body.assigned_to || '';
+  const status_text = req.body.status_text || '';
 
-  // Validar campos requeridos
   if (!issue_title || !issue_text || !created_by) {
     return res.json({ error: 'required field(s) missing' });
   }
 
-  // Inicializar array de issues para el proyecto si no existe
-  if (!issuesDB[project]) {
-    issuesDB[project] = [];
-  }
+  if (!issuesDB[project]) issuesDB[project] = [];
 
   const now = new Date();
   const newIssue = {
@@ -34,7 +30,7 @@ router.post('/issues/:project', (req, res) => {
     status_text,
     created_on: now,
     updated_on: now,
-    open: true,
+    open: true
   };
 
   issuesDB[project].push(newIssue);
@@ -46,27 +42,29 @@ router.get('/issues/:project', (req, res) => {
   const project = req.params.project;
   const filters = req.query;
 
-  if (!issuesDB[project]) {
-    return res.json([]);
-  }
+  if (!issuesDB[project]) return res.json([]);
 
-  let filteredIssues = [...issuesDB[project]];
+  let issues = [...issuesDB[project]];
 
-  // Aplicar filtros EXACTOS
-  Object.keys(filters).forEach((key) => {
+  Object.keys(filters).forEach(key => {
     if (key === '_id') {
-      filteredIssues = filteredIssues.filter((issue) => issue[key] === filters[key]);
+      issues = issues.filter(issue => issue._id === filters[key]);
     } else if (key === 'open') {
-      const value = filters[key] === 'true';
-      filteredIssues = filteredIssues.filter((issue) => issue[key] === value);
+      // Manejo EXACTO de booleanos como espera FCC
+      if (filters[key] === 'true') {
+        issues = issues.filter(issue => issue.open === true);
+      } else if (filters[key] === 'false') {
+        issues = issues.filter(issue => issue.open === false);
+      }
     } else {
-      filteredIssues = filteredIssues.filter((issue) => 
+      // Filtro exacto (case-insensitive para texto)
+      issues = issues.filter(issue => 
         String(issue[key]).toLowerCase() === String(filters[key]).toLowerCase()
       );
     }
   });
 
-  res.json(filteredIssues);
+  res.json(issues);
 });
 
 // PUT /api/issues/:project
@@ -74,52 +72,59 @@ router.put('/issues/:project', (req, res) => {
   const project = req.params.project;
   const { _id, ...updateFields } = req.body;
 
-  // 1. Validar _id
+  // 1. Validar _id presente
   if (!_id) {
     return res.json({ error: 'missing _id' });
   }
 
-  // 2. Validar que hay campos para actualizar (excluyendo strings vacíos)
+  // 2. Filtrar campos vacíos o undefined
   const filteredUpdates = {};
   Object.keys(updateFields).forEach(key => {
-    if (updateFields[key] !== '') {
+    if (updateFields[key] !== undefined && updateFields[key] !== '') {
       filteredUpdates[key] = updateFields[key];
     }
   });
 
+  // 3. Si no hay campos válidos después de filtrar
   if (Object.keys(filteredUpdates).length === 0) {
     return res.json({ error: 'no update field(s) sent', '_id': _id });
   }
 
-  // 3. Buscar proyecto
+  // 4. Buscar proyecto e issue
   if (!issuesDB[project]) {
     return res.json({ error: 'could not update', '_id': _id });
   }
 
-  const issueIndex = issuesDB[project].findIndex((issue) => issue._id === _id);
+  const issueIndex = issuesDB[project].findIndex(issue => issue._id === _id);
   if (issueIndex === -1) {
     return res.json({ error: 'could not update', '_id': _id });
   }
 
-  // 4. Actualizar campos permitidos
+  // 5. Actualizar solo campos permitidos
   const allowedFields = ['issue_title', 'issue_text', 'created_by', 'assigned_to', 'status_text', 'open'];
-  let hasValidUpdate = false;
+  let updated = false;
 
-  allowedFields.forEach((field) => {
+  allowedFields.forEach(field => {
     if (filteredUpdates[field] !== undefined) {
-      issuesDB[project][issueIndex][field] = filteredUpdates[field];
-      hasValidUpdate = true;
+      // Manejo especial para campo 'open'
+      if (field === 'open') {
+        issuesDB[project][issueIndex][field] = (filteredUpdates[field] === true || 
+                                               filteredUpdates[field] === 'true');
+      } else {
+        issuesDB[project][issueIndex][field] = filteredUpdates[field];
+      }
+      updated = true;
     }
   });
 
-  if (!hasValidUpdate) {
+  if (!updated) {
     return res.json({ error: 'could not update', '_id': _id });
   }
 
-  // 5. Actualizar fecha
+  // 6. SIEMPRE actualizar updated_on (incluso si el valor no cambió)
   issuesDB[project][issueIndex].updated_on = new Date();
 
-  // 6. Devolver respuesta EXACTA
+  // 7. Respuesta EXACTA que espera FCC
   res.json({ result: 'successfully updated', '_id': _id });
 });
 
@@ -128,22 +133,19 @@ router.delete('/issues/:project', (req, res) => {
   const project = req.params.project;
   const { _id } = req.body;
 
-  // Validar _id
   if (!_id) {
     return res.json({ error: 'missing _id' });
   }
 
-  // Buscar proyecto
   if (!issuesDB[project]) {
     return res.json({ error: 'could not delete', '_id': _id });
   }
 
-  const issueIndex = issuesDB[project].findIndex((issue) => issue._id === _id);
+  const issueIndex = issuesDB[project].findIndex(issue => issue._id === _id);
   if (issueIndex === -1) {
     return res.json({ error: 'could not delete', '_id': _id });
   }
 
-  // Eliminar issue
   issuesDB[project].splice(issueIndex, 1);
   res.json({ result: 'successfully deleted', '_id': _id });
 });
