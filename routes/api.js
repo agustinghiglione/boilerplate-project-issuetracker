@@ -52,17 +52,14 @@ router.get('/issues/:project', (req, res) => {
 
   let filteredIssues = [...issuesDB[project]];
 
-  // Aplicar filtros EXACTOS (no parciales)
+  // Aplicar filtros EXACTOS
   Object.keys(filters).forEach((key) => {
     if (key === '_id') {
-      // Filtro exacto para _id
       filteredIssues = filteredIssues.filter((issue) => issue[key] === filters[key]);
     } else if (key === 'open') {
-      // Convertir string a boolean
       const value = filters[key] === 'true';
       filteredIssues = filteredIssues.filter((issue) => issue[key] === value);
     } else {
-      // Filtro exacto para otros campos de texto
       filteredIssues = filteredIssues.filter((issue) => 
         String(issue[key]).toLowerCase() === String(filters[key]).toLowerCase()
       );
@@ -77,17 +74,24 @@ router.put('/issues/:project', (req, res) => {
   const project = req.params.project;
   const { _id, ...updateFields } = req.body;
 
-  // Validar _id
+  // 1. Validar _id
   if (!_id) {
     return res.json({ error: 'missing _id' });
   }
 
-  // Validar campos a actualizar
-  if (Object.keys(updateFields).length === 0) {
+  // 2. Validar que hay campos para actualizar (excluyendo strings vacíos)
+  const filteredUpdates = {};
+  Object.keys(updateFields).forEach(key => {
+    if (updateFields[key] !== '') {
+      filteredUpdates[key] = updateFields[key];
+    }
+  });
+
+  if (Object.keys(filteredUpdates).length === 0) {
     return res.json({ error: 'no update field(s) sent', '_id': _id });
   }
 
-  // Buscar proyecto y issue
+  // 3. Buscar proyecto
   if (!issuesDB[project]) {
     return res.json({ error: 'could not update', '_id': _id });
   }
@@ -97,13 +101,13 @@ router.put('/issues/:project', (req, res) => {
     return res.json({ error: 'could not update', '_id': _id });
   }
 
-  // Actualizar campos permitidos
+  // 4. Actualizar campos permitidos
   const allowedFields = ['issue_title', 'issue_text', 'created_by', 'assigned_to', 'status_text', 'open'];
   let hasValidUpdate = false;
 
   allowedFields.forEach((field) => {
-    if (updateFields[field] !== undefined && updateFields[field] !== '') {
-      issuesDB[project][issueIndex][field] = updateFields[field];
+    if (filteredUpdates[field] !== undefined) {
+      issuesDB[project][issueIndex][field] = filteredUpdates[field];
       hasValidUpdate = true;
     }
   });
@@ -112,10 +116,10 @@ router.put('/issues/:project', (req, res) => {
     return res.json({ error: 'could not update', '_id': _id });
   }
 
-  // Actualizar fecha (IMPORTANTE)
+  // 5. Actualizar fecha
   issuesDB[project][issueIndex].updated_on = new Date();
 
-  // Devolver EXACTAMENTE lo que FCC espera
+  // 6. Devolver respuesta EXACTA
   res.json({ result: 'successfully updated', '_id': _id });
 });
 
