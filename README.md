@@ -1,4 +1,4 @@
-Issue Tracker
+# Issue Tracker
 A full-stack Issue Tracker web application built with the MERN stack (MongoDB, Express, React, Node.js). This project allows users to create, read, update, delete, and filter software development issues, featuring a RESTful API and a responsive frontend.
 
 # Live Application
